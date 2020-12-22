@@ -87,6 +87,11 @@
     NSDictionary<NSString*, id>* settings = args[@"settings"];
 
     WKWebViewConfiguration* configuration = [[WKWebViewConfiguration alloc] init];
+    
+    // add 
+    [configuration.preferences setValue:@TRUE forKey:@"allowFileAccessFromFileURLs"];
+    // end
+
     configuration.userContentController = userContentController;
     [self updateAutoMediaPlaybackPolicy:args[@"autoMediaPlaybackPolicy"]
                         inConfiguration:configuration];
@@ -111,11 +116,21 @@
     // TODO(amirh): return an error if apply settings failed once it's possible to do so.
     // https://github.com/flutter/flutter/issues/36228
 
-    NSString* initialUrl = args[@"initialUrl"];
-    if ([initialUrl isKindOfClass:[NSString class]]) {
-      [self loadUrl:initialUrl];
+    // add
+    NSNumber *local = args[@"local"];
+    if([local boolValue]) {
+      NSURL *fileURL = [NSURL fileURLWithPath:args[@"initialUrl"]];
+      NSURL *folderURL = [NSURL fileURLWithPath:args[@"localScope"]];
+      [_webView loadFileURL:fileURL allowingReadAccessToURL:folderURL];
     }
-  }
+    else {
+      NSString* initialUrl = args[@"initialUrl"];
+      if ([initialUrl isKindOfClass:[NSString class]]) {
+        [self loadUrl:initialUrl];
+      }
+    }
+    // end
+  } 
   return self;
 }
 
