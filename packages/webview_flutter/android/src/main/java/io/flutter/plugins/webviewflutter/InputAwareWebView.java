@@ -15,6 +15,19 @@ import android.view.inputmethod.InputMethodManager;
 import android.webkit.WebView;
 import android.widget.ListPopupWindow;
 
+import android.os.Build;
+import android.view.ActionMode;
+import android.view.LayoutInflater;
+import android.view.MenuItem;
+import android.view.MotionEvent;
+import android.view.ViewTreeObserver;
+import android.view.inputmethod.EditorInfo;
+import android.view.inputmethod.InputConnection;
+import android.widget.AbsoluteLayout;
+import android.widget.LinearLayout;
+import android.widget.TextView;
+
+
 /**
  * A WebView subclass that mirrors the same implementation hacks that the system WebView does in
  * order to correctly create an InputConnection.
@@ -188,6 +201,166 @@ final class InputAwareWebView extends WebView {
             imm.isActive(containerView);
           }
         });
+  }
+
+  @Override
+  public InputConnection onCreateInputConnection(EditorInfo outAttrs) {
+    InputConnection connection = super.onCreateInputConnection(outAttrs);
+    if (connection == null && containerView != null) {
+      /// solve the problem of some models stuck and flashing back
+      containerView
+          .getHandler()
+          .postDelayed(
+              new Runnable() {
+                @Override
+                public void run() {
+                  InputMethodManager imm =
+                      (InputMethodManager) getContext().getSystemService(INPUT_METHOD_SERVICE);
+                  if (!imm.isAcceptingText()) {
+                    imm.hideSoftInputFromWindow(
+                        containerView.getWindowToken(), InputMethodManager.HIDE_NOT_ALWAYS);
+                  }
+                }
+              },
+              128);
+    }
+    return connection;
+  }
+
+  private MotionEvent ev;
+
+  @Override
+  public boolean dispatchTouchEvent(MotionEvent ev) {
+    this.ev = ev;
+    return super.dispatchTouchEvent(ev);
+  }
+  
+  /**
+    * 判断是否有长按动作发生
+    * @param lastX 按下时X坐标
+    * @param lastY 按下时Y坐标
+    * @param thisX 移动时X坐标
+    * @param thisY 移动时Y坐标
+    * @param lastDownTime 按下时间
+    * @param thisEventTime 移动时间
+    * @param longPressTime 判断长按时间的阀值
+    */
+  //   private boolean isLongPressed(float lastX,float lastY,float thisX,float thisY,long lastDownTime,long thisEventTime,long longPressTime) {
+  //     float offsetX = Math.abs(thisX - lastX);
+  //     float offsetY = Math.abs(thisY - lastY);
+  //     long intervalTime = thisEventTime - lastDownTime;
+  //     if(offsetX <=10 && offsetY<=10 && intervalTime >= longPressTime){
+  //       return true;
+  //     }
+  //     return false;
+  //   }
+
+  // private float downX, downY;
+
+  @Override
+  public boolean onTouchEvent(MotionEvent event) {
+    if(event.getAction() == MotionEvent.ACTION_DOWN) {
+      // downX = event.getX();
+      // downY = event.getY();
+      if (floatingActionView != null) {
+        this.removeView(floatingActionView);
+        floatingActionView = null;
+      }
+    }
+    
+    // if (event.getAction() == MotionEvent.ACTION_UP) {
+    //   boolean isLong = isLongPressed(downX,downY,event.getX(), event.getY() ,event.getDownTime(),event.getEventTime(),500);
+    //   if(isLong) {
+    //     dispatchTouchEvent(event);
+    //   }
+    // }
+    return super.onTouchEvent(event);
+  }
+
+  @Override
+  public ActionMode startActionMode(ActionMode.Callback callback) {
+    return rebuildActionMode(super.startActionMode(callback), callback);
+  }
+
+  @Override
+  public ActionMode startActionMode(ActionMode.Callback callback, int type) {
+    return rebuildActionMode(super.startActionMode(callback, type), callback);
+  }
+
+  private LinearLayout floatingActionView;
+
+  /** rebuild the menu */
+  private ActionMode rebuildActionMode(
+      final ActionMode actionMode, final ActionMode.Callback callback) {
+    if (floatingActionView != null) {
+      this.removeView(floatingActionView);
+      floatingActionView = null;
+    }
+    floatingActionView =
+        (LinearLayout)
+            LayoutInflater.from(getContext()).inflate(R.layout.floating_action_mode, null);
+    for (int i = 0; i < actionMode.getMenu().size(); i++) {
+      final MenuItem menu = actionMode.getMenu().getItem(i);
+      TextView text =
+          (TextView)
+              LayoutInflater.from(getContext()).inflate(R.layout.floating_action_mode_item, null);
+      text.setText(menu.getTitle());
+      floatingActionView.addView(text);
+      text.setOnClickListener(
+          new OnClickListener() {
+            @Override
+            public void onClick(View view) {
+              InputAwareWebView.this.removeView(floatingActionView);
+              floatingActionView = null;
+              callback.onActionItemClicked(actionMode, menu);
+            }
+          });
+      // supports up to 4 options
+      if (i >= 4) break;
+    }
+
+    final int x = (int) ev.getX();
+    final int y = (int) ev.getY();
+    floatingActionView
+        .getViewTreeObserver()
+        .addOnGlobalLayoutListener(
+            new ViewTreeObserver.OnGlobalLayoutListener() {
+              @Override
+              public void onGlobalLayout() {
+                if (Build.VERSION.SDK_INT >= 16) {
+                  floatingActionView.getViewTreeObserver().removeOnGlobalLayoutListener(this);
+                } else {
+                  floatingActionView.getViewTreeObserver().removeGlobalOnLayoutListener(this);
+                }
+                onFloatingActionGlobalLayout(x, y);
+              }
+            });
+    this.addView(floatingActionView, new AbsoluteLayout.LayoutParams(-2, -2, x, y));
+    actionMode.getMenu().clear();
+    return actionMode;
+  }
+
+  /** reposition menu options */
+  private void onFloatingActionGlobalLayout(int x, int y) {
+    int maxWidth = InputAwareWebView.this.getWidth();
+    int maxHeight = InputAwareWebView.this.getHeight();
+    int width = floatingActionView.getWidth();
+    int height = floatingActionView.getHeight();
+    int curx = x - width / 2;
+    if (curx < 0) {
+      curx = 0;
+    } else if (curx + width > maxWidth) {
+      curx = maxWidth - width;
+    }
+    int cury = y + 10;
+    if (cury + height > maxHeight) {
+      cury = y - height - 10;
+    }
+
+    InputAwareWebView.this.updateViewLayout(
+        floatingActionView,
+        new AbsoluteLayout.LayoutParams(-2, -2, curx, cury + InputAwareWebView.this.getScrollY()));
+    floatingActionView.setAlpha(1);
   }
 
   @Override
