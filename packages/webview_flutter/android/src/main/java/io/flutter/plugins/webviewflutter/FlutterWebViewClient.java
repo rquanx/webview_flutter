@@ -22,6 +22,10 @@ import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
 
+import androidx.annotation.NonNull;
+import io.flutter.plugin.common.PluginRegistry;
+import android.content.Intent;
+
 // We need to use WebViewClientCompat to get
 // shouldOverrideUrlLoading(WebView view, WebResourceRequest request)
 // invoked by the webview on older Android devices, without it pages that use iframes will
@@ -205,7 +209,7 @@ class FlutterWebViewClient {
   private WebViewClientCompat internalCreateWebViewClientCompat() {
     return new WebViewClientCompat() {
       @Override
-      public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
+      public boolean shouldOverrideUrlLoading(@NonNull WebView view,@NonNull WebResourceRequest request) {
         return FlutterWebViewClient.this.shouldOverrideUrlLoading(view, request);
       }
 

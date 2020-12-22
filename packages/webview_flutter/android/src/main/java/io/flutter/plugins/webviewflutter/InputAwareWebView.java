@@ -15,6 +15,9 @@ import android.view.inputmethod.InputMethodManager;
 import android.webkit.WebView;
 import android.widget.ListPopupWindow;
 
+import io.flutter.plugin.common.PluginRegistry;
+import android.content.Intent;
+
 /**
  * A WebView subclass that mirrors the same implementation hacks that the system WebView does in
  * order to correctly create an InputConnection.
